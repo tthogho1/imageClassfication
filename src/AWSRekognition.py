@@ -63,9 +63,24 @@ rekognition_client = boto3.client(
 )
 
 # Firestore初期化
+firebase_credentials_path = os.getenv("FIREBASE_CREDENTIALS_PATH")
 if not firebase_admin._apps:
-    cred = credentials.ApplicationDefault()
-    firebase_admin.initialize_app(cred)
+    try:
+        if not firebase_credentials_path or not os.path.exists(
+            firebase_credentials_path
+        ):
+            abs_path = (
+                os.path.abspath(firebase_credentials_path)
+                if firebase_credentials_path
+                else None
+            )
+            logger.error(f"Firebase credentials file not found: {abs_path}")
+            raise FileNotFoundError(f"Firebase credentials file not found: {abs_path}")
+        cred = credentials.Certificate(firebase_credentials_path)
+        firebase_admin.initialize_app(cred)
+    except Exception as e:
+        logger.error(f"Firestore initialization failed: {e}")
+        raise
 db = firestore.client()
 
 fileName = "1215281253.jpg"  # 物体検出を行う画像ファイル名
@@ -80,4 +95,5 @@ with open(fileName, "rb") as image_file:
     # resutltをFirestoreに保存する
     doc_ref = db.collection("rekognition_results").document(fileName)
     doc_ref.set(result)
-
+    # 完了メッセージを出力
+    logger.info("Rekognition results saved to Firestore for %s.", fileName)
