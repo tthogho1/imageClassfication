@@ -33,7 +33,7 @@ transform = transforms.Compose(
     ]
 )
 
-img = Image.open("1605270897.jpg").convert("RGB")  #
+img = Image.open("1215281253.jpg").convert("RGB")  #
 input_tensor = transform(img).unsqueeze(0)
 with torch.no_grad():
     output = model(input_tensor)
