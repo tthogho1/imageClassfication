@@ -1,0 +1,26 @@
+{
+  "type": "module",
+  "scripts": {
+    "build": "tsc rekognition.ts",
+    "start": "node rekognition.js",
+    "dev": "ts-node --esm rekognition.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.828.0",
+    "@aws-sdk/client-s3": "^3.828.0",
+    "@aws-sdk/client-sqs": "^3.828.0",
+    "@google-cloud/firestore": "^7.11.1",
+    "@types/dotenv": "^8.2.3",
+    "dotenv": "^16.5.0",
+    "firebase-admin": "^13.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.11.30"
+  },
+  "volta": {
+    "node": "18.12.1",
+    "npm": "9.2.0"
+  }
+}
