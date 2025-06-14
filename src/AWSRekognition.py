@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import firebase_admin
 from firebase_admin import credentials, firestore
+import json
 
 # ログ設定
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -83,17 +84,58 @@ if not firebase_admin._apps:
         raise
 db = firestore.client()
 
-fileName = "1215281253.jpg"  # 物体検出を行う画像ファイル名
-# 例：ローカルの画像ファイルから物体検出
-with open(fileName, "rb") as image_file:
-    image_bytes = image_file.read()
+# SQS/S3クライアント初期化
+sqs = boto3.client(
+    "sqs",
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    region_name=os.getenv("AWS_REGION"),
+)
+
+s3 = boto3.client(
+    "s3",
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+    region_name=os.getenv("AWS_REGION"),
+)
+
+SQS_QUEUE_URL = os.getenv("SQS_QUEUE_URL")
+
+# SQSからメッセージ受信
+while True:
+    response = sqs.receive_message(
+        QueueUrl=SQS_QUEUE_URL, MaxNumberOfMessages=1, WaitTimeSeconds=10
+    )
+    messages = response.get("Messages", [])
+    if not messages:
+        logger.info("No messages in SQS queue. Waiting...")
+        continue
+
+    message = messages[0]
+    event = json.loads(message["Body"])
+
+    # SQSメッセージを削除
+    sqs.delete_message(QueueUrl=SQS_QUEUE_URL, ReceiptHandle=message["ReceiptHandle"])
+
+    bucket_name = event["detail"]["bucket"]["name"]
+    object_key = event["detail"]["object"]["key"]
+    if not bucket_name or not object_key:
+        logger.error(f"S3 path or bucket not found in SQS message: {event}")
+        sqs.delete_message(
+            QueueUrl=SQS_QUEUE_URL, ReceiptHandle=message["ReceiptHandle"]
+        )
+        continue
+
+    # S3から画像ファイルをメモリ上に取得
+    s3_object = s3.get_object(Bucket=bucket_name, Key=object_key)
+    image_bytes = s3_object["Body"].read()
+
     image = {"Bytes": image_bytes}
+    fileName = os.path.basename(object_key)
+
     rekognition_image = RekognitionImage(image, fileName, rekognition_client)
     labels = rekognition_image.detect_labels()
-    # print(labels)
     result = convertToJson(fileName, labels)
-    # resutltをFirestoreに保存する
-    doc_ref = db.collection("rekognition_results").document(fileName)
+    doc_ref = db.collection(os.getenv("FIRESTORE_COLLECTION")).document(fileName)
     doc_ref.set(result)
-    # 完了メッセージを出力
     logger.info("Rekognition results saved to Firestore for %s.", fileName)
